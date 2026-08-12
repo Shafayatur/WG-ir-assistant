@@ -49,8 +49,18 @@ Hard rules, no exceptions:
 """.strip()
 
 
+_client: genai.Client | None = None
+
+
 def get_client() -> genai.Client:
-    return genai.Client(api_key=Config.GEMINI_API_KEY)
+    """Reuses a single Client instance for the whole process. Creating a
+    new Client per call and letting it go out of scope can cause its
+    underlying httpx connection to be garbage-collected and closed before
+    a request completes - keeping one persistent instance avoids that."""
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=Config.GEMINI_API_KEY)
+    return _client
 
 
 def start_chat():
