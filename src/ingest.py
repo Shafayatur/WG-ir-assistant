@@ -120,15 +120,23 @@ def _slice_with_header(raw_df: pd.DataFrame, header_row: int, expected_columns: 
 
 
 def _parse_date_column(series: pd.Series) -> pd.Series:
-    """Sheets use 'DD-Mon-YYYY' (e.g. 03-Aug-2026). Falls back to a looser
-    parse for any rows that don't match, rather than dropping them silently."""
+    """Sheets mix two date formats: 'DD-Mon-YYYY' (e.g. 03-Aug-2026) and
+    'D-Mon-YY' (e.g. 1-Mar-26). Try both explicitly, in order, rather than
+    letting dateutil guess row-by-row - guessing is slower and can silently
+    misread ambiguous values. Anything that still doesn't match either
+    format (e.g. stray 'Day'/'Cumulative' label rows mixed into the sheet)
+    is left as NaT and dropped downstream, which is correct - those aren't
+    real daily records."""
     series = series.replace("", pd.NA)
+
     parsed = pd.to_datetime(series, format="%d-%b-%Y", errors="coerce")
+
     still_missing = parsed.isna() & series.notna()
     if still_missing.any():
         parsed.loc[still_missing] = pd.to_datetime(
-            series[still_missing], errors="coerce", dayfirst=True
+            series[still_missing], format="%d-%b-%y", errors="coerce"
         )
+
     return parsed
 
 
