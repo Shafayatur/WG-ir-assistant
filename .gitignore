@@ -1,0 +1,21 @@
+# Secrets - never commit these
+.env
+*service-account*.json
+google-credentials.json
+
+# Virtual environment
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
