@@ -24,14 +24,23 @@ def _get_client() -> gspread.Client:
     return gspread.authorize(creds)
 
 
-def fetch_sheet_as_raw_df(sheet_id: str, worksheet_index: int = 0) -> pd.DataFrame:
+def fetch_sheet_as_raw_df(sheet_id: str, worksheet_index: int = 0, worksheet_name: str | None = None) -> pd.DataFrame:
     """
-    Fetch a worksheet by index (default: first tab) and return it as a
-    headerless DataFrame (all rows, no column names assigned yet).
+    Fetch a worksheet and return it as a headerless DataFrame (all rows,
+    no column names assigned yet).
+
+    Prefer worksheet_name when the spreadsheet has multiple tabs - looking
+    up by name is robust to tabs being reordered or new tabs being added,
+    whereas an index silently grabs the wrong tab.
     """
     client = _get_client()
     spreadsheet = client.open_by_key(sheet_id)
-    worksheet = spreadsheet.get_worksheet(worksheet_index)
+
+    if worksheet_name is not None:
+        worksheet = spreadsheet.worksheet(worksheet_name)
+    else:
+        worksheet = spreadsheet.get_worksheet(worksheet_index)
+
     values = worksheet.get_all_values()  # list of lists of strings
 
     if not values:
@@ -45,4 +54,7 @@ def fetch_order_sheet_raw() -> pd.DataFrame:
 
 
 def fetch_cf_tracker_raw() -> pd.DataFrame:
-    return fetch_sheet_as_raw_df(Config.GOOGLE_SHEET_CF_TRACKER_ID)
+    return fetch_sheet_as_raw_df(
+        Config.GOOGLE_SHEET_CF_TRACKER_ID,
+        worksheet_name=Config.CF_TRACKER_WORKSHEET_NAME,
+    )

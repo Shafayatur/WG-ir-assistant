@@ -24,6 +24,7 @@ class Config:
     GOOGLE_SERVICE_ACCOUNT_FILE = _require("GOOGLE_SERVICE_ACCOUNT_FILE")
     GOOGLE_SHEET_ORDER_ID = _require("GOOGLE_SHEET_ORDER_ID")
     GOOGLE_SHEET_CF_TRACKER_ID = _require("GOOGLE_SHEET_CF_TRACKER_ID")
+    CF_TRACKER_WORKSHEET_NAME = os.environ.get("CF_TRACKER_WORKSHEET_NAME", "CF Update Tracker")
     NEON_DATABASE_URL = _require("NEON_DATABASE_URL")
     # Gemini/passkey are required later (Phase 2/3), not for the sync script,
     # so they're read lazily instead of at import time.
