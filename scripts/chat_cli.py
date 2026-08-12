@@ -1,66 +1,32 @@
 """
-Wraps the Gemini API with our tool layer (src/llm_tools.py) and a system
-instruction that enforces grounding: the model must only state numbers
-that came back from a tool call, and must say so explicitly when data
-isn't available rather than guessing.
+Interactive terminal chat, to test the bot's tool use and grounding
+before building the Streamlit UI around it.
 
-Uses the google-genai SDK's automatic function calling: we pass our
-plain Python functions as tools, and the SDK handles calling them and
-feeding results back to the model before it writes a final answer.
+Run from the project root:
+    python -m scripts.chat_cli
+
+Type 'exit' to quit.
 """
-from google import genai
-from google.genai import types
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.config import Config
-from src.llm_tools import ALL_TOOLS
-
-MODEL_NAME = "gemini-flash-latest"
-
-SYSTEM_INSTRUCTION = """
-You are an internal data assistant for the WeGro IR (Investor Relations) team.
-
-You have tools that query two live data sources:
-- Orders: individual investment orders (status/stage, amounts, projects, dates)
-- CF Tracker: daily rollup metrics (registrations, bookings, investments, investor counts)
-
-Hard rules, no exceptions:
-1. NEVER state a number, count, date, or fact about the data unless it came
-   from a tool call you just made in this conversation. Do not use general
-   knowledge or guess at company-specific figures.
-2. If a tool returns an empty result or no matching data, say plainly that
-   you could not find that information - do not estimate or fill the gap.
-3. Distinguish clearly between: (a) a number directly from the data, (b) a
-   number you calculated from tool results (e.g. a percentage or average -
-   say you calculated it), and (c) something you cannot determine from
-   available data.
-4. When a user's wording is ambiguous (e.g. a project name that doesn't
-   exactly match), use list_projects to find the closest real match before
-   answering, and tell the user which project you matched it to.
-5. "Active" investments means stage='active' (currently invested or
-   disbursing). If the user says "active" or "ongoing" or "current
-   investors", use stage='active' unless they clearly mean something else.
-6. For "latest" or "today" on CF Tracker data, always call get_latest_cf_day
-   first - do not assume today's calendar date, since the underlying sheet
-   has empty placeholder rows for future dates that haven't happened yet.
-7. Never mention or ask for customer name, phone, email, or bank account
-   details - this data is intentionally not stored anywhere in the system.
-8. Keep answers concise and appropriate for a non-technical audience. State
-   the specific numbers, not just a vague summary.
-""".strip()
+from src.chatbot import start_chat
 
 
-def get_client() -> genai.Client:
-    return genai.Client(api_key=Config.GEMINI_API_KEY)
+def main():
+    print("WeGro IR Assistant (test CLI). Type 'exit' to quit.\n")
+    chat = start_chat()
+
+    while True:
+        user_input = input("You: ").strip()
+        if user_input.lower() in ("exit", "quit"):
+            break
+        if not user_input:
+            continue
+
+        response = chat.send_message(user_input)
+        print(f"\nBot: {response.text}\n")
 
 
-def start_chat():
-    """Returns a new chat session with tools and system instructions wired
-    up. Call .send_message(text) on the result for each user turn."""
-    client = get_client()
-    return client.chats.create(
-        model=MODEL_NAME,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            tools=ALL_TOOLS,
-        ),
-    )
+if __name__ == "__main__":
+    main()
