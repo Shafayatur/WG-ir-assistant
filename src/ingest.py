@@ -153,12 +153,16 @@ def clean_orders(raw_df: pd.DataFrame) -> pd.DataFrame:
         df[col] = _parse_date_column(df[col])
 
     numeric_cols = [
-        "id", "is_insurance_applied", "base_sub_total", "base_grand_total",
+        "id", "base_sub_total", "base_grand_total",
         "returned_amount", "tenure", "transaction_count", "return_count",
         "profit_min", "profit_max", "opa_id",
     ]
     for col in numeric_cols:
         df[col] = _to_numeric(df[col])
+
+    # Sheets stores this as 0/1, but the Neon column is BOOLEAN - cast
+    # explicitly so pandas writes real bool values, not int64.
+    df["is_insurance_applied"] = _to_numeric(df["is_insurance_applied"]).fillna(0).astype(int).astype(bool)
 
     df["status"] = df["status"].str.strip().str.lower()
     df["stage"] = df["status"].map(STATUS_TO_STAGE)
