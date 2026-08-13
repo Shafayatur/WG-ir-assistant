@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS orders (
     status                  TEXT,
     stage                   TEXT,
     is_active               BOOLEAN,
+    customer_name           TEXT,
+    customer_phone          TEXT,
+    customer_email          TEXT,
     customer_unique_id      TEXT,
     customer_created_at     DATE,
     project_name            TEXT,
@@ -50,6 +53,14 @@ CREATE TABLE IF NOT EXISTS orders (
     bank_branch             TEXT,
     synced_at               TIMESTAMP DEFAULT now()
 );
+"""
+
+# Adds columns to an orders table that already exists from before this
+# schema change, without touching existing rows - safe to run repeatedly.
+ALTER_ORDERS_TABLE_ADD_CONTACT_COLUMNS = """
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT;
 """
 
 CREATE_CF_TRACKER_TABLE = """
@@ -72,6 +83,7 @@ def create_tables():
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text(CREATE_ORDERS_TABLE))
+        conn.execute(text(ALTER_ORDERS_TABLE_ADD_CONTACT_COLUMNS))
         conn.execute(text(CREATE_CF_TRACKER_TABLE))
 
 

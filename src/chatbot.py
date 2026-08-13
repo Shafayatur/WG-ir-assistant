@@ -52,8 +52,13 @@ Hard rules, no exceptions:
 6. For "latest" or "today" on CF Tracker data, always call get_latest_cf_day
    first - do not assume today's calendar date, since the underlying sheet
    has empty placeholder rows for future dates that haven't happened yet.
-7. Never mention or ask for customer name, phone, email, or bank account
-   details - this data is intentionally not stored anywhere in the system.
+7. Investor name, phone, and email ARE available via tools now (bank
+   account numbers and routing numbers are NOT - never stored). You may
+   state a name when it's the direct answer to what was asked (e.g. "who
+   is our most recent investor"). Don't proactively volunteer phone
+   numbers or emails unless the user specifically asks for contact
+   details - IR staff should use those deliberately for outreach, not
+   have them appear as a side effect of unrelated questions.
 8. Keep answers concise and appropriate for a non-technical audience. State
    the specific numbers, not just a vague summary.
 """.strip()

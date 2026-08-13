@@ -27,6 +27,9 @@ ORDER_EXPECTED_COLUMNS = {
     "base_grand_total": ["base_grand_total"],
     "returned_amount": ["returned_amount"],
     "status": ["status"],
+    "customer_name": ["customer_name"],
+    "customer_phone": ["customer_phone"],
+    "customer_email": ["customer_email"],
     "customer_unique_id": ["customer_unique_id"],
     "customer_created_at": ["customer_created_at"],
     "project_name": ["project_name"],
@@ -46,10 +49,14 @@ ORDER_EXPECTED_COLUMNS = {
     "bank_branch": ["bank_branch"],
 }
 
-# Explicitly never keep these, even if present in the source sheet.
+# Bank account credentials specifically stay excluded, even though name/
+# phone/email are now kept: these are meaningfully higher risk (direct
+# financial fraud exposure) and, on Gemini's free tier, tool results can
+# be used by Google to improve their products - account numbers are not
+# something to hand to a third party API on that tier. Revisit only after
+# moving to a paid tier, and even then confirm it's actually needed.
 ORDER_PII_COLUMNS = [
-    "customer_name", "customer_phone", "customer_email", "customer_id",
-    "bank_account_name", "bank_account_no", "branch_routing_number",
+    "customer_id", "bank_account_name", "bank_account_no", "branch_routing_number",
 ]
 
 CF_TRACKER_EXPECTED_COLUMNS = {
@@ -176,7 +183,8 @@ def clean_orders(raw_df: pd.DataFrame) -> pd.DataFrame:
     df["stage"] = df["status"].map(STATUS_TO_STAGE)
     df["is_active"] = df["status"].isin(ACTIVE_STATUSES)
 
-    for col in ["increment_id", "customer_unique_id", "project_name",
+    for col in ["increment_id", "customer_unique_id", "customer_name",
+                "customer_phone", "customer_email", "project_name",
                 "remark", "bank_name", "bank_branch"]:
         df[col] = df[col].replace("", pd.NA)
 

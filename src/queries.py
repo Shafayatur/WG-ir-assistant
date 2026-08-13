@@ -154,7 +154,7 @@ def filter_orders(
         SELECT id, increment_id, status, stage, project_name, tenure,
                base_grand_total, returned_amount, profit_min, profit_max,
                order_created_at, invested_created_at, close_date,
-               customer_unique_id
+               customer_unique_id, customer_name, customer_phone, customer_email
         FROM orders
         {where_sql}
         ORDER BY order_created_at DESC
@@ -204,19 +204,34 @@ def get_order_summary(
 
 def top_investors(n: int = 10, stage: Optional[str] = None) -> pd.DataFrame:
     """Top investors by total invested amount, grouped by
-    customer_unique_id (never by name/email - those aren't stored)."""
+    customer_unique_id, with the most recent known name/contact info for
+    that investor attached (one investor can have multiple orders with
+    the same unique id but occasionally slightly different name spelling
+    across orders - this takes the most recent order's name)."""
     where_sql = "WHERE stage = :stage" if stage else ""
     params = {"n": n}
     if stage:
         params["stage"] = stage
 
     return _query(f"""
+        WITH ranked AS (
+            SELECT
+                customer_unique_id, customer_name, customer_phone, customer_email,
+                base_grand_total, order_created_at,
+                ROW_NUMBER() OVER (
+                    PARTITION BY customer_unique_id ORDER BY order_created_at DESC
+                ) AS rn
+            FROM orders
+            {where_sql}
+        )
         SELECT
             customer_unique_id,
+            MAX(customer_name) FILTER (WHERE rn = 1) AS customer_name,
+            MAX(customer_phone) FILTER (WHERE rn = 1) AS customer_phone,
+            MAX(customer_email) FILTER (WHERE rn = 1) AS customer_email,
             COUNT(*) AS order_count,
             SUM(base_grand_total) AS total_invested
-        FROM orders
-        {where_sql}
+        FROM ranked
         GROUP BY customer_unique_id
         ORDER BY total_invested DESC
         LIMIT :n;
@@ -254,3 +269,18 @@ def list_projects(limit: int = 50) -> pd.DataFrame:
         ORDER BY order_count DESC
         LIMIT :limit;
     """, {"limit": limit})
+
+
+def search_orders_by_name(name: str, limit: int = 20) -> pd.DataFrame:
+    """Finds orders belonging to a customer by (partial, case-insensitive)
+    name match. Use this when the user asks about a specific investor by
+    name rather than by customer_unique_id."""
+    return _query("""
+        SELECT id, increment_id, status, stage, project_name,
+               base_grand_total, order_created_at, close_date,
+               customer_unique_id, customer_name, customer_phone, customer_email
+        FROM orders
+        WHERE customer_name ILIKE :name
+        ORDER BY order_created_at DESC
+        LIMIT :limit;
+    """, {"name": f"%{name}%", "limit": limit})

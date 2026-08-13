@@ -87,22 +87,20 @@ def filter_orders(
     end_date: Optional[str] = None,
     limit: int = 20,
 ) -> list:
-    """Returns individual orders matching filters. Prefer get_order_summary
-    instead of this function whenever the user wants a total, count, or
-    average rather than a list of individual orders - this function
-    returns full row data and is more expensive to use in conversation.
-    stage is one of 'pending', 'active', 'closed', 'canceled' (active =
-    currently invested or disbursing; use this unless the user
-    specifically asks about a raw status). status is the exact underlying
-    value: 'pending', 'invested', 'disbursement_running', 'closed',
-    'canceled'. project_name matches partially/case-insensitively. Dates
-    are YYYY-MM-DD strings and filter on order_created_at. Does not
-    include any customer name, phone, email, or bank account details -
-    those are never stored, only an anonymous customer_unique_id. Keep
-    limit small (default 20, rarely need more than ~30 for a chat answer)
-    - only raise it if the user explicitly asks to see many individual
-    records. Results are most recent first."""
-    
+    """Returns individual orders matching filters, including investor
+    name/phone/email. Prefer get_order_summary instead of this function
+    whenever the user wants a total, count, or average rather than a list
+    of individual orders - this function returns full row data and is
+    more expensive to use in conversation. stage is one of 'pending',
+    'active', 'closed', 'canceled' (active = currently invested or
+    disbursing; use this unless the user specifically asks about a raw
+    status). status is the exact underlying value: 'pending', 'invested',
+    'disbursement_running', 'closed', 'canceled'. project_name matches
+    partially/case-insensitively. Dates are YYYY-MM-DD strings and filter
+    on order_created_at. Bank account numbers and routing numbers are
+    never stored/returned - only bank name/branch for context. Keep limit
+    small (default 20) unless the user explicitly asks to see many
+    individual records. Results are most recent first."""
     df = queries.filter_orders(
         stage=stage, status=status, project_name=project_name, tenure=tenure,
         min_amount=min_amount, max_amount=max_amount,
@@ -132,10 +130,10 @@ def get_order_summary(
 
 
 def top_investors(n: int = 10, stage: Optional[str] = None) -> list:
-    """Top investors ranked by total amount invested, identified only by
-    an anonymous customer_unique_id (never name, phone, or email - those
-    are not stored). Optionally filter to a specific stage ('active',
-    'closed', etc)."""
+    """Top investors ranked by total amount invested, including their
+    name, phone, and email (bank account numbers are never stored or
+    returned). Optionally filter to a specific stage ('active', 'closed',
+    etc)."""
     df = queries.top_investors(n=n, stage=stage)
     return _json_safe(df)
 
@@ -159,6 +157,17 @@ def list_projects(limit: int = 50) -> list:
     return _json_safe(df)
 
 
+def search_orders_by_name(name: str, limit: int = 20) -> list:
+    """Finds orders belonging to an investor by (partial, case-insensitive)
+    name match - e.g. name='Tanjir' matches 'Md. Tanjir Hossain'. Use this
+    whenever the user asks about a specific investor by name. Returns
+    that investor's orders with name/phone/email included. If nothing
+    matches, returns an empty list - say plainly that no investor by that
+    name was found rather than guessing."""
+    df = queries.search_orders_by_name(name=name, limit=limit)
+    return _json_safe(df)
+
+
 # All tool functions, for the chatbot module to register with Gemini.
 ALL_TOOLS = [
     get_latest_cf_day,
@@ -169,4 +178,5 @@ ALL_TOOLS = [
     top_investors,
     compare_order_periods,
     list_projects,
+    search_orders_by_name,
 ]
