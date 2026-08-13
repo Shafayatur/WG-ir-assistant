@@ -10,11 +10,21 @@ feeding results back to the model before it writes a final answer.
 """
 from google import genai
 from google.genai import types
+from google.genai import errors as genai_errors
+import time
 
 from src.config import Config
 from src.llm_tools import ALL_TOOLS
 
 MODEL_NAME = "gemini-flash-latest"
+
+# After this many user turns in one session, start a fresh chat instead of
+# letting history grow unbounded. Every message resends the full history
+# to Gemini, including any large tool results (e.g. filter_orders rows) -
+# without a cap, a long session gets progressively more expensive per
+# question even if the questions themselves are simple.
+MAX_TURNS_BEFORE_RESET = 8
+RATE_LIMIT_WAIT_SECONDS = 65
 
 SYSTEM_INSTRUCTION = """
 You are an internal data assistant for the WeGro IR (Investor Relations) team.
@@ -74,3 +84,27 @@ def start_chat():
             tools=ALL_TOOLS,
         ),
     )
+
+
+def friendly_error(e: Exception) -> str:
+    """Turns raw API/network errors into a message a non-technical user
+    could actually read - stack traces should never be user-facing."""
+    if isinstance(e, genai_errors.ClientError) and getattr(e, "code", None) == 429:
+        return ("The assistant is getting a lot of requests right now "
+                "(rate limit reached). Please wait about a minute and "
+                "try again.")
+    if isinstance(e, genai_errors.ClientError):
+        return f"The assistant hit an error talking to Gemini ({e.code}). Please try again."
+    return f"Something went wrong answering that: {e}"
+
+
+def send_with_retry(chat, user_input: str):
+    """Tries once, and if it's specifically a rate limit (429), waits and
+    retries automatically one time before giving up."""
+    try:
+        return chat.send_message(user_input)
+    except genai_errors.ClientError as e:
+        if getattr(e, "code", None) == 429:
+            time.sleep(RATE_LIMIT_WAIT_SECONDS)
+            return chat.send_message(user_input)
+        raise
