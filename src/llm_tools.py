@@ -129,6 +129,22 @@ def get_order_summary(
     return _json_safe(result)
 
 
+def get_order_count(
+    stage: Optional[str] = None,
+    project_name: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> int:
+    """Quick lightweight count of orders matching filters - returns just
+    the number. Use this instead of filter_orders when the user asks 'how
+    many orders' or 'how many investors' - much more token-efficient since
+    it returns a single number instead of full row data."""
+    return queries.get_order_count(
+        stage=stage, project_name=project_name,
+        start_date=_parse_date(start_date), end_date=_parse_date(end_date),
+    )
+
+
 def top_investors(n: int = 10, stage: Optional[str] = None) -> list:
     """Top investors ranked by total amount invested, including their
     name, phone, and email (bank account numbers are never stored or
@@ -175,6 +191,7 @@ ALL_TOOLS = [
     compare_cf_periods,
     filter_orders,
     get_order_summary,
+    get_order_count,
     top_investors,
     compare_order_periods,
     list_projects,

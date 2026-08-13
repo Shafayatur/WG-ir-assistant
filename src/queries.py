@@ -115,7 +115,7 @@ def filter_orders(
     max_amount: Optional[float] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    limit: int = 500,
+    limit: int = 25,
 ) -> pd.DataFrame:
     """Flexible order filter. All params optional - None means 'no filter
     on this field'. This is the workhorse function most chatbot questions
@@ -200,6 +200,22 @@ def get_order_summary(
     """, params)
 
     return df.iloc[0].to_dict()
+
+
+def get_order_count(
+    stage: Optional[str] = None,
+    project_name: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> int:
+    """Quick count of orders matching filters - returns just the count,
+    not full row data. Use this for efficiency when answering 'how many
+    orders' or 'how many investors' questions."""
+    result = get_order_summary(
+        stage=stage, project_name=project_name,
+        start_date=start_date, end_date=end_date,
+    )
+    return result["order_count"]
 
 
 def top_investors(n: int = 10, stage: Optional[str] = None) -> pd.DataFrame:
