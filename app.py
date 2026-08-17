@@ -1,7 +1,13 @@
 """
 WeGro IR Assistant - Streamlit app.
 
-Two tabs, one login gate:
+Two views, switched via a sidebar radio (not st.tabs) - this matters:
+st.chat_input only reliably docks to the bottom of the browser viewport
+when it's rendered at the TOP LEVEL of the page. Nested inside st.tabs(),
+it loses that fixed positioning and sits in normal page flow instead,
+forcing users to scroll down to reach it. A sidebar switcher keeps the
+selected view at the top level, so the chat input docks properly.
+
 - Dashboard: fixed views calling src/queries.py directly - zero LLM cost,
   works even if Gemini is down or the API key is missing/invalid.
 - Ask a Question: the Gemini chatbot from src/chatbot.py, wired to the
@@ -16,7 +22,28 @@ from src.config import Config
 from src import queries
 from src.chatbot import start_chat, send_with_retry, friendly_error, MAX_TURNS_BEFORE_RESET
 
-st.set_page_config(page_title="WeGro IR Assistant", layout="wide")
+st.set_page_config(page_title="WeGro IR Assistant", page_icon="🌾", layout="wide")
+
+st.markdown("""
+<style>
+.wegro-header {
+    background: linear-gradient(135deg, #2F7D4B 0%, #4CAF6D 100%);
+    padding: 1.4rem 1.8rem;
+    border-radius: 12px;
+    margin-bottom: 1.2rem;
+}
+.wegro-header h1 {
+    color: white;
+    margin: 0;
+    font-size: 1.6rem;
+}
+.wegro-header p {
+    color: #E7F5EA;
+    margin: 0.2rem 0 0 0;
+    font-size: 0.95rem;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -27,8 +54,12 @@ def check_passkey() -> bool:
     if st.session_state.get("authenticated"):
         return True
 
-    st.title("WeGro IR Assistant")
-    st.caption("Internal tool - Investor Relations team only")
+    st.markdown("""
+    <div class="wegro-header">
+        <h1>🌾 WeGro IR Assistant</h1>
+        <p>Internal tool - Investor Relations team only</p>
+    </div>
+    """, unsafe_allow_html=True)
     passkey = st.text_input("Enter passkey", type="password")
     if st.button("Enter"):
         if passkey == Config.APP_PASSKEY:
@@ -44,16 +75,20 @@ if not check_passkey():
 
 
 # ---------------------------------------------------------------------------
-# Sidebar
+# Sidebar - navigation + utilities
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.subheader("WeGro IR Assistant")
+    st.markdown("### 🌾 WeGro IR")
     try:
         latest_day = queries.get_latest_cf_day()
         st.caption(f"Latest CF Tracker data: {latest_day}")
     except Exception:
         st.caption("Could not load latest data date.")
+
+    st.divider()
+    view = st.radio("View", ["📊 Dashboard", "💬 Ask a Question"], label_visibility="collapsed")
+    st.divider()
 
     if st.button("New conversation"):
         st.session_state.pop("chat_session", None)
@@ -66,14 +101,18 @@ with st.sidebar:
         st.rerun()
 
 
-tab_dashboard, tab_chat = st.tabs(["📊 Dashboard", "💬 Ask a Question"])
-
-
 # ---------------------------------------------------------------------------
-# Dashboard tab - no LLM involved, pure query layer
+# Dashboard view - no LLM involved, pure query layer
 # ---------------------------------------------------------------------------
 
-with tab_dashboard:
+if view == "📊 Dashboard":
+    st.markdown("""
+    <div class="wegro-header">
+        <h1>🌾 WeGro IR Assistant</h1>
+        <p>Investor Relations - live data from Orders and CF Tracker</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.subheader("Overview")
 
     try:
@@ -166,10 +205,18 @@ with tab_dashboard:
 
 
 # ---------------------------------------------------------------------------
-# Chat tab
+# Chat view - rendered at top level (not inside a tab) so st.chat_input
+# docks properly to the bottom of the browser viewport.
 # ---------------------------------------------------------------------------
 
-with tab_chat:
+else:
+    st.markdown("""
+    <div class="wegro-header">
+        <h1>🌾 Ask a Question</h1>
+        <p>Ask about investors, orders, or CF Tracker data - grounded in live data only</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.turn_count = 0
@@ -183,43 +230,34 @@ with tab_chat:
         st.warning(
             "The chat assistant is currently unavailable "
             f"({st.session_state.chat_unavailable}). "
-            "The Dashboard tab is unaffected and still has full data access."
+            "The Dashboard view is unaffected and still has full data access."
         )
     else:
-        # Fixed-height container: Streamlit auto-scrolls this to the
-        # bottom whenever new content is added, giving a messenger-style
-        # "always see the latest message" feel instead of a page that
-        # keeps growing and needs manual scrolling.
-        chat_box = st.container(height=500)
-
-        with chat_box:
-            for msg in st.session_state.messages:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
+        for msg in st.session_state.messages:
+            avatar = "🧑‍💼" if msg["role"] == "user" else "🌾"
+            with st.chat_message(msg["role"], avatar=avatar):
+                st.markdown(msg["content"])
 
         user_input = st.chat_input("Ask about investors, orders, or CF tracker data...")
         if user_input:
             st.session_state.messages.append({"role": "user", "content": user_input})
-            with chat_box:
-                with st.chat_message("user"):
-                    st.markdown(user_input)
+            with st.chat_message("user", avatar="🧑‍💼"):
+                st.markdown(user_input)
 
             if st.session_state.turn_count >= MAX_TURNS_BEFORE_RESET:
                 st.session_state.chat_session = start_chat()
                 st.session_state.turn_count = 0
-                with chat_box:
-                    st.info("Starting a fresh conversation to keep things efficient - "
-                             "earlier context in this session is no longer available.")
+                st.info("Starting a fresh conversation to keep things efficient - "
+                         "earlier context in this session is no longer available.")
 
-            with chat_box:
-                with st.chat_message("assistant"):
-                    with st.spinner("Thinking..."):
-                        try:
-                            response = send_with_retry(st.session_state.chat_session, user_input)
-                            answer = response.text
-                        except Exception as e:
-                            answer = friendly_error(e)
-                    st.markdown(answer)
+            with st.chat_message("assistant", avatar="🌾"):
+                with st.spinner("Thinking..."):
+                    try:
+                        response = send_with_retry(st.session_state.chat_session, user_input)
+                        answer = response.text
+                    except Exception as e:
+                        answer = friendly_error(e)
+                st.markdown(answer)
 
             st.session_state.messages.append({"role": "assistant", "content": answer})
             st.session_state.turn_count += 1
