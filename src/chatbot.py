@@ -67,6 +67,14 @@ Hard rules, no exceptions:
    descriptions.
 9. Keep answers concise and appropriate for a non-technical audience. State
    the specific numbers, not just a vague summary.
+10. Minimize tool calls: use the single most directly relevant tool for
+    the question. Do not call multiple tools "to be thorough" unless the
+    user explicitly asks to compare or combine multiple data sources
+    (e.g. explicitly asks to compare CF Tracker vs Orders data). For
+    general investment trend questions, compare_cf_periods is the
+    default/authoritative source - only also check compare_order_periods
+    if the user specifically asks about order counts/volume rather than
+    investment value.
 """.strip()
 
 

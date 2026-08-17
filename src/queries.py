@@ -286,6 +286,22 @@ def search_orders_by_name(name: str, limit: int = 20) -> pd.DataFrame:
     """, {"name": f"%{name}%", "limit": limit})
 
 
+def get_latest_investor() -> pd.DataFrame:
+    """Single row: the single most recent order (by order_created_at),
+    with full investor name/contact/project details. This is the direct
+    answer to 'who is our latest/most recent investor' - use this exact
+    function for that question rather than filter_orders or
+    top_investors, which are less direct for this specific case."""
+    return _query("""
+        SELECT id, increment_id, status, stage, project_name, base_grand_total,
+               order_created_at, invested_created_at, customer_unique_id,
+               customer_name, customer_phone, customer_email
+        FROM orders
+        ORDER BY order_created_at DESC
+        LIMIT 1;
+    """)
+
+
 # ---------------------------------------------------------------------------
 # Investor segments (tier, category, activity status) - precomputed during
 # sync from src/segments.py, not recalculated per question.

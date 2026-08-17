@@ -68,10 +68,12 @@ def get_cf_summary(start_date: Optional[str] = None, end_date: Optional[str] = N
 
 
 def compare_cf_periods(period: str = "month", n_periods: int = 6) -> list:
-    """Trend of CF Tracker metrics over time, grouped by 'day', 'week', or
-    'month'. Returns the most recent n_periods, oldest first. Use this for
-    questions like 'show me the monthly trend' or 'how has investment
-    value changed over the last few months'."""
+    """PREFERRED/DEFAULT tool for investment trend questions (e.g.
+    'compare investment this month vs last month', 'show the monthly
+    investment trend'). Trend of CF Tracker metrics over time, grouped by
+    'day', 'week', or 'month'. Returns the most recent n_periods, oldest
+    first. Use compare_order_periods instead only if the user is asking
+    specifically about order counts/volume rather than investment value."""
     df = queries.compare_cf_periods(period=period, n_periods=n_periods)
     return _json_safe(df)
 
@@ -88,19 +90,21 @@ def filter_orders(
     limit: int = 20,
 ) -> list:
     """Returns individual orders matching filters, including investor
-    name/phone/email. Prefer get_order_summary instead of this function
-    whenever the user wants a total, count, or average rather than a list
-    of individual orders - this function returns full row data and is
-    more expensive to use in conversation. stage is one of 'pending',
-    'active', 'closed', 'canceled' (active = currently invested or
-    disbursing; use this unless the user specifically asks about a raw
-    status). status is the exact underlying value: 'pending', 'invested',
-    'disbursement_running', 'closed', 'canceled'. project_name matches
-    partially/case-insensitively. Dates are YYYY-MM-DD strings and filter
-    on order_created_at. Bank account numbers and routing numbers are
-    never stored/returned - only bank name/branch for context. Keep limit
-    small (default 20) unless the user explicitly asks to see many
-    individual records. Results are most recent first."""
+    name/phone/email. For 'who is our latest investor' specifically, use
+    get_latest_investor instead - it's more direct. Prefer
+    get_order_summary instead of this function whenever the user wants a
+    total, count, or average rather than a list of individual orders -
+    this function returns full row data and is more expensive to use in
+    conversation. stage is one of 'pending', 'active', 'closed',
+    'canceled' (active = currently invested or disbursing; use this
+    unless the user specifically asks about a raw status). status is the
+    exact underlying value: 'pending', 'invested', 'disbursement_running',
+    'closed', 'canceled'. project_name matches partially/case-
+    insensitively. Dates are YYYY-MM-DD strings and filter on
+    order_created_at. Bank account numbers and routing numbers are never
+    stored/returned - only bank name/branch for context. Keep limit small
+    (default 20) unless the user explicitly asks to see many individual
+    records. Results are most recent first."""
     df = queries.filter_orders(
         stage=stage, status=status, project_name=project_name, tenure=tenure,
         min_amount=min_amount, max_amount=max_amount,
@@ -139,9 +143,12 @@ def top_investors(n: int = 10, stage: Optional[str] = None) -> list:
 
 
 def compare_order_periods(period: str = "month", n_periods: int = 6) -> list:
-    """Trend of order volume and total amount over time, grouped by
-    'day', 'week', or 'month', based on when orders were created. Returns
-    the most recent n_periods, oldest first."""
+    """Use ONLY for questions specifically about order COUNT or volume
+    over time (e.g. 'how many orders per month'), not general investment
+    trend questions - use compare_cf_periods for those instead. Trend of
+    order volume and total amount over time, grouped by 'day', 'week', or
+    'month', based on when orders were created. Returns the most recent
+    n_periods, oldest first."""
     df = queries.compare_order_periods(period=period, n_periods=n_periods)
     return _json_safe(df)
 
@@ -165,6 +172,16 @@ def search_orders_by_name(name: str, limit: int = 20) -> list:
     matches, returns an empty list - say plainly that no investor by that
     name was found rather than guessing."""
     df = queries.search_orders_by_name(name=name, limit=limit)
+    return _json_safe(df)
+
+
+def get_latest_investor() -> list:
+    """The single most recent order/investor, with full details. This is
+    THE tool for questions like 'who is our latest/most recent investor'
+    or 'who just invested' - use this instead of filter_orders or
+    top_investors for that specific question, it's a single direct
+    lookup rather than a general-purpose filter."""
+    df = queries.get_latest_investor()
     return _json_safe(df)
 
 
@@ -245,6 +262,7 @@ ALL_TOOLS = [
     compare_order_periods,
     list_projects,
     search_orders_by_name,
+    get_latest_investor,
     get_investor_segment,
     list_investor_segments,
     get_segment_tier_breakdown,
