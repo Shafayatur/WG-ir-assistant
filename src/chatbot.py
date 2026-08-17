@@ -99,23 +99,39 @@ def start_chat():
 
 def friendly_error(e: Exception) -> str:
     """Turns raw API/network errors into a message a non-technical user
-    could actually read - stack traces should never be user-facing."""
-    if isinstance(e, genai_errors.ClientError) and getattr(e, "code", None) == 429:
-        return ("The assistant is getting a lot of requests right now "
-                "(rate limit reached). Please wait about a minute and "
-                "try again.")
-    if isinstance(e, genai_errors.ClientError):
-        return f"The assistant hit an error talking to Gemini ({e.code}). Please try again."
+    could actually read - stack traces should never be user-facing.
+    Handles both ClientError (4xx - problem with the request/quota) and
+    ServerError (5xx - problem on Google's end, usually transient)."""
+    code = getattr(e, "code", None)
+    if isinstance(e, (genai_errors.ClientError, genai_errors.ServerError)):
+        if code == 429:
+            return ("The assistant is getting a lot of requests right now "
+                    "(rate limit reached). Please wait about a minute and "
+                    "try again.")
+        if code and 500 <= code < 600:
+            return ("Google's Gemini service is temporarily overloaded on "
+                    "their end (not a problem with our data or your "
+                    "question). Please try again in a few seconds.")
+        return f"The assistant hit an error talking to Gemini ({code}). Please try again."
     return f"Something went wrong answering that: {e}"
 
 
 def send_with_retry(chat, user_input: str):
-    """Tries once, and if it's specifically a rate limit (429), waits and
-    retries automatically one time before giving up."""
-    try:
-        return chat.send_message(user_input)
-    except genai_errors.ClientError as e:
-        if getattr(e, "code", None) == 429:
-            time.sleep(RATE_LIMIT_WAIT_SECONDS)
+    """Tries once, and retries automatically for known-transient errors:
+    - 429 (rate limit): wait out the window, then retry once.
+    - 5xx (Google's servers temporarily overloaded): short backoff retry,
+      up to 2 extra attempts, since these are usually momentary."""
+    last_exception = None
+    for attempt in range(3):
+        try:
             return chat.send_message(user_input)
-        raise
+        except (genai_errors.ClientError, genai_errors.ServerError) as e:
+            last_exception = e
+            code = getattr(e, "code", None)
+            if code == 429:
+                time.sleep(RATE_LIMIT_WAIT_SECONDS)
+            elif code and 500 <= code < 600 and attempt < 2:
+                time.sleep(3 * (attempt + 1))  # 3s, then 6s
+            else:
+                raise
+    raise last_exception
