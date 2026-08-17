@@ -186,30 +186,40 @@ with tab_chat:
             "The Dashboard tab is unaffected and still has full data access."
         )
     else:
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+        # Fixed-height container: Streamlit auto-scrolls this to the
+        # bottom whenever new content is added, giving a messenger-style
+        # "always see the latest message" feel instead of a page that
+        # keeps growing and needs manual scrolling.
+        chat_box = st.container(height=500)
+
+        with chat_box:
+            for msg in st.session_state.messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
 
         user_input = st.chat_input("Ask about investors, orders, or CF tracker data...")
         if user_input:
             st.session_state.messages.append({"role": "user", "content": user_input})
-            with st.chat_message("user"):
-                st.markdown(user_input)
+            with chat_box:
+                with st.chat_message("user"):
+                    st.markdown(user_input)
 
             if st.session_state.turn_count >= MAX_TURNS_BEFORE_RESET:
                 st.session_state.chat_session = start_chat()
                 st.session_state.turn_count = 0
-                st.info("Starting a fresh conversation to keep things efficient - "
-                         "earlier context in this session is no longer available.")
+                with chat_box:
+                    st.info("Starting a fresh conversation to keep things efficient - "
+                             "earlier context in this session is no longer available.")
 
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    try:
-                        response = send_with_retry(st.session_state.chat_session, user_input)
-                        answer = response.text
-                    except Exception as e:
-                        answer = friendly_error(e)
-                st.markdown(answer)
+            with chat_box:
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        try:
+                            response = send_with_retry(st.session_state.chat_session, user_input)
+                            answer = response.text
+                        except Exception as e:
+                            answer = friendly_error(e)
+                    st.markdown(answer)
 
             st.session_state.messages.append({"role": "assistant", "content": answer})
             st.session_state.turn_count += 1
