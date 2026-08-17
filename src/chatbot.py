@@ -23,7 +23,7 @@ MODEL_NAME = "gemini-flash-latest"
 # to Gemini, including any large tool results (e.g. filter_orders rows) -
 # without a cap, a long session gets progressively more expensive per
 # question even if the questions themselves are simple.
-MAX_TURNS_BEFORE_RESET = 5
+MAX_TURNS_BEFORE_RESET = 8
 RATE_LIMIT_WAIT_SECONDS = 65
 
 SYSTEM_INSTRUCTION = """
@@ -59,15 +59,14 @@ Hard rules, no exceptions:
    numbers or emails unless the user specifically asks for contact
    details - IR staff should use those deliberately for outreach, not
    have them appear as a side effect of unrelated questions.
-8. Keep answers concise and appropriate for a non-technical audience. State
+8. Investor Tier (Low/Mid/High/VIP), favorite product category, preferred
+   tenure, and activity status (Active/Cooling/Inactive - Reach Out) are
+   precomputed business classifications - use list_investor_segments or
+   get_investor_segment for these rather than trying to calculate them
+   yourself from raw orders. Full definitions are in those tools'
+   descriptions.
+9. Keep answers concise and appropriate for a non-technical audience. State
    the specific numbers, not just a vague summary.
-9. EFFICIENCY RULE: For 'how many' questions, use get_order_count() instead
-   of filter_orders or get_order_summary - it returns just the number and
-   saves significant tokens. Only use filter_orders when the user explicitly
-   asks to see individual order details or records.
-10. EFFICIENCY RULE: Prefer get_order_summary for totals/aggregates and
-    compare_cf_periods for trends over calling filter_orders with large
-    result sets.
 """.strip()
 
 

@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from src.sheets_client import fetch_order_sheet_raw, fetch_cf_tracker_raw
 from src.ingest import clean_orders, clean_cf_tracker
-from src.db import create_tables, upsert_orders, upsert_cf_tracker
+from src.db import create_tables, upsert_orders, upsert_cf_tracker, upsert_investor_segments
+from src.segments import compute_investor_segments
 
 
 def main():
@@ -32,6 +33,15 @@ def main():
 
     print("Upserting Orders into Neon...")
     n = upsert_orders(orders_df)
+    print(f"  -> {n} rows upserted")
+
+    print("Computing investor segments (tier, category, activity status)...")
+    segments_df = compute_investor_segments(orders_df)
+    print(f"  -> {len(segments_df)} investors segmented")
+    print(f"  -> Tier breakdown: {segments_df['tier'].value_counts().to_dict()}")
+
+    print("Upserting investor segments into Neon...")
+    n = upsert_investor_segments(segments_df)
     print(f"  -> {n} rows upserted")
 
     print("Fetching CF Tracker sheet from Google Sheets...")

@@ -129,22 +129,6 @@ def get_order_summary(
     return _json_safe(result)
 
 
-def get_order_count(
-    stage: Optional[str] = None,
-    project_name: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> int:
-    """Quick lightweight count of orders matching filters - returns just
-    the number. Use this instead of filter_orders when the user asks 'how
-    many orders' or 'how many investors' - much more token-efficient since
-    it returns a single number instead of full row data."""
-    return queries.get_order_count(
-        stage=stage, project_name=project_name,
-        start_date=_parse_date(start_date), end_date=_parse_date(end_date),
-    )
-
-
 def top_investors(n: int = 10, stage: Optional[str] = None) -> list:
     """Top investors ranked by total amount invested, including their
     name, phone, and email (bank account numbers are never stored or
@@ -184,6 +168,72 @@ def search_orders_by_name(name: str, limit: int = 20) -> list:
     return _json_safe(df)
 
 
+def get_investor_segment(name: Optional[str] = None, customer_unique_id: Optional[str] = None) -> list:
+    """Look up an investor's full segment profile by name or
+    customer_unique_id: tier, favorite product category, preferred
+    tenure, activity status, total invested, etc. Provide either name or
+    customer_unique_id, not both. Use this for questions like 'what tier
+    is X in' or 'what does investor X prefer to invest in'."""
+    df = queries.get_investor_segment(name=name, customer_unique_id=customer_unique_id)
+    return _json_safe(df)
+
+
+def list_investor_segments(
+    tier: Optional[str] = None,
+    activity_status: Optional[str] = None,
+    favorite_category: Optional[str] = None,
+    preferred_tenure: Optional[int] = None,
+    has_active_investment: Optional[bool] = None,
+    min_total_invested: Optional[float] = None,
+    limit: int = 30,
+) -> list:
+    """The main tool for investor segmentation questions - e.g. 'VIP
+    investors with an 18-month preferred tenure', 'inactive High-tier
+    investors to reach out to', 'investors whose favorite category is
+    Fish'. All parameters optional and combinable.
+
+    tier: one of 'Low' (< 50,000 total invested), 'Mid' (50,000-249,999),
+    'High' (250,000-1,999,999), or 'VIP' (>= 2,000,000). Based on total
+    amount invested across that investor's full history of orders with
+    status invested/disbursement_running/closed (pending and canceled
+    orders don't count toward tier).
+
+    activity_status: one of 'Active' (invested within the last 60 days),
+    'Cooling' (61-180 days since last investment), or 'Inactive - Reach
+    Out' (180+ days since last investment) - all relative to today's
+    actual date, not the data sync date.
+
+    favorite_category: the product category (e.g. 'Fish', 'Cattle',
+    'Rice/Paddy', 'Poultry', 'Vegetable', etc) this investor has put the
+    most total money into, out of all their orders.
+
+    preferred_tenure: the tenure (in months) this investor has chosen
+    most often, counted by NUMBER OF ORDERS at that tenure - not by
+    money amount. If they've placed an equal number of orders at two
+    different tenures, the longer tenure is used as the tiebreaker.
+
+    has_active_investment: true if they currently have at least one
+    order in 'invested' or 'disbursement_running' status right now.
+
+    Results are sorted VIP-first, then most-inactive-first within each
+    tier - a natural outreach priority order."""
+    df = queries.list_investor_segments(
+        tier=tier, activity_status=activity_status, favorite_category=favorite_category,
+        preferred_tenure=preferred_tenure, has_active_investment=has_active_investment,
+        min_total_invested=min_total_invested, limit=limit,
+    )
+    return _json_safe(df)
+
+
+def get_segment_tier_breakdown() -> list:
+    """Count of investors and total/average amount invested per tier
+    (Low/Mid/High/VIP) - a quick overview of the investor base
+    composition. Use this for questions like 'how many VIP investors do
+    we have' or 'give me a breakdown of investors by tier'."""
+    df = queries.get_segment_tier_breakdown()
+    return _json_safe(df)
+
+
 # All tool functions, for the chatbot module to register with Gemini.
 ALL_TOOLS = [
     get_latest_cf_day,
@@ -191,9 +241,11 @@ ALL_TOOLS = [
     compare_cf_periods,
     filter_orders,
     get_order_summary,
-    get_order_count,
     top_investors,
     compare_order_periods,
     list_projects,
     search_orders_by_name,
+    get_investor_segment,
+    list_investor_segments,
+    get_segment_tier_breakdown,
 ]

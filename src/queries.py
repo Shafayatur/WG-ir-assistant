@@ -115,7 +115,7 @@ def filter_orders(
     max_amount: Optional[float] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    limit: int = 25,
+    limit: int = 500,
 ) -> pd.DataFrame:
     """Flexible order filter. All params optional - None means 'no filter
     on this field'. This is the workhorse function most chatbot questions
@@ -202,22 +202,6 @@ def get_order_summary(
     return df.iloc[0].to_dict()
 
 
-def get_order_count(
-    stage: Optional[str] = None,
-    project_name: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-) -> int:
-    """Quick count of orders matching filters - returns just the count,
-    not full row data. Use this for efficiency when answering 'how many
-    orders' or 'how many investors' questions."""
-    result = get_order_summary(
-        stage=stage, project_name=project_name,
-        start_date=start_date, end_date=end_date,
-    )
-    return result["order_count"]
-
-
 def top_investors(n: int = 10, stage: Optional[str] = None) -> pd.DataFrame:
     """Top investors by total invested amount, grouped by
     customer_unique_id, with the most recent known name/contact info for
@@ -300,3 +284,87 @@ def search_orders_by_name(name: str, limit: int = 20) -> pd.DataFrame:
         ORDER BY order_created_at DESC
         LIMIT :limit;
     """, {"name": f"%{name}%", "limit": limit})
+
+
+# ---------------------------------------------------------------------------
+# Investor segments (tier, category, activity status) - precomputed during
+# sync from src/segments.py, not recalculated per question.
+# ---------------------------------------------------------------------------
+
+def get_investor_segment(name: Optional[str] = None, customer_unique_id: Optional[str] = None) -> pd.DataFrame:
+    """Look up one investor's full segment profile (tier, favorite
+    category, preferred tenure, activity status, etc.) by name or by
+    customer_unique_id. Provide one or the other."""
+    if customer_unique_id:
+        return _query(
+            "SELECT * FROM investor_segments WHERE customer_unique_id = :id;",
+            {"id": customer_unique_id},
+        )
+    return _query(
+        "SELECT * FROM investor_segments WHERE customer_name ILIKE :name ORDER BY total_invested DESC;",
+        {"name": f"%{name}%"},
+    )
+
+
+def list_investor_segments(
+    tier: Optional[str] = None,
+    activity_status: Optional[str] = None,
+    favorite_category: Optional[str] = None,
+    preferred_tenure: Optional[int] = None,
+    has_active_investment: Optional[bool] = None,
+    min_total_invested: Optional[float] = None,
+    limit: int = 30,
+) -> pd.DataFrame:
+    """Flexible investor segment filter - the main tool for questions like
+    'VIP investors with 18-month preferred tenure' or 'inactive High-tier
+    investors we should reach out to'. All params optional. Results
+    sorted tier first (VIP first), then most-inactive-first within tier -
+    a natural outreach priority order."""
+    where_clauses = []
+    params: dict = {"limit": limit}
+
+    if tier:
+        where_clauses.append("tier = :tier")
+        params["tier"] = tier
+    if activity_status:
+        where_clauses.append("activity_status = :activity_status")
+        params["activity_status"] = activity_status
+    if favorite_category:
+        where_clauses.append("favorite_category = :favorite_category")
+        params["favorite_category"] = favorite_category
+    if preferred_tenure is not None:
+        where_clauses.append("preferred_tenure = :preferred_tenure")
+        params["preferred_tenure"] = preferred_tenure
+    if has_active_investment is not None:
+        where_clauses.append("has_active_investment = :has_active")
+        params["has_active"] = has_active_investment
+    if min_total_invested is not None:
+        where_clauses.append("total_invested >= :min_total")
+        params["min_total"] = min_total_invested
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    return _query(f"""
+        SELECT customer_unique_id, customer_name, tier, total_invested,
+               num_investments, favorite_category, preferred_tenure,
+               has_active_investment, last_project_name,
+               days_since_last_investment, activity_status
+        FROM investor_segments
+        {where_sql}
+        ORDER BY
+            CASE tier WHEN 'VIP' THEN 1 WHEN 'High' THEN 2 WHEN 'Mid' THEN 3 ELSE 4 END,
+            days_since_last_investment DESC
+        LIMIT :limit;
+    """, params)
+
+
+def get_segment_tier_breakdown() -> pd.DataFrame:
+    """Count and total invested amount per tier - a quick overview of
+    the investor base composition."""
+    return _query("""
+        SELECT tier, COUNT(*) AS investor_count, SUM(total_invested) AS total_invested,
+               AVG(total_invested) AS avg_invested
+        FROM investor_segments
+        GROUP BY tier
+        ORDER BY CASE tier WHEN 'VIP' THEN 1 WHEN 'High' THEN 2 WHEN 'Mid' THEN 3 ELSE 4 END;
+    """)

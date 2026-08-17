@@ -124,6 +124,27 @@ with tab_dashboard:
         st.error(f"Could not load top investors: {e}")
 
     st.divider()
+    st.markdown("**Investor segments**")
+    try:
+        tier_breakdown = queries.get_segment_tier_breakdown()
+        st.dataframe(tier_breakdown, use_container_width=True, hide_index=True)
+
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            tier_pick = st.selectbox("Tier", ["(any)", "VIP", "High", "Mid", "Low"])
+        with sc2:
+            activity_pick = st.selectbox("Activity status", ["(any)", "Active", "Cooling", "Inactive - Reach Out"])
+
+        segments = queries.list_investor_segments(
+            tier=None if tier_pick == "(any)" else tier_pick,
+            activity_status=None if activity_pick == "(any)" else activity_pick,
+            limit=50,
+        )
+        st.dataframe(segments, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"Could not load investor segments: {e}")
+
+    st.divider()
     st.markdown("**Filter orders**")
     fc1, fc2, fc3 = st.columns(3)
     with fc1:
